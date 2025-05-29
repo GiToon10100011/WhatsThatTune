@@ -1,4 +1,4 @@
-# 🎵 Music Quiz App
+# 🎵 What's That Tune?
 
 A fun and interactive quiz app built with **Electron** (or responsive web fallback) that allows users to guess songs from short audio snippets sourced from their **Spotify** or **YouTube** playlists.
 
