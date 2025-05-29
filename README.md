@@ -62,3 +62,52 @@ If Electron is not supported (e.g., mobile browsers), the application gracefully
 ---
 
 ## 🗂 Folder Structure (Example)
+
+```
+music-quiz-app/
+├── public/
+├── src/
+│ ├── auth/
+│ ├── components/
+│ ├── game/
+│ ├── pages/
+│ ├── services/
+│ ├── utils/
+│ └── main.ts (Electron entry)
+├── electron/
+│ └── main.js
+├── .env
+└── README.md
+```
+
+
+---
+
+## 📦 Optional Enhancements (Future Ideas)
+- ⏱ Timer per question
+- 🔁 Replay missed questions
+- 👥 Real-time multiplayer
+- 🧠 AI-generated wrong options
+
+---
+
+## ✅ Getting Started
+
+```bash
+# Clone the repo
+git clone https://github.com/yourname/music-quiz-app.git
+
+# Install dependencies
+cd music-quiz-app
+npm install
+
+# Run development (Electron)
+npm run electron:dev
+
+# OR run as a web app
+npm run dev
+```
+---
+# 📄 License
+
+MIT
