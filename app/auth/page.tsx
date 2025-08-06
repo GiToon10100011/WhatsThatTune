@@ -1,71 +1,121 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { getAvailableSongs } from "@/lib/quiz-data"
+import { getCurrentUser, getSession } from "@/lib/auth"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, CheckCircle, Music, Shield, Eye } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
+import { ArrowLeft, Plus, Download, Music, Youtube, List } from "lucide-react"
 import Link from "next/link"
+import { ProcessingProgressModal } from "@/components/processing-progress-modal"
 
-interface ConnectedService {
-  name: string
-  icon: string
-  connected: boolean
-  playlists?: number
-  description: string
-}
+export default function ImportPage() {
+  const [urlInput, setUrlInput] = useState("")
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [processedSongs, setProcessedSongs] = useState<string[]>([])
+  const [user, setUser] = useState<any>(null)
+  const [showProgressModal, setShowProgressModal] = useState(false)
 
-export default function AuthPage() {
-  const [services, setServices] = useState<ConnectedService[]>([
-    {
-      name: "Spotify",
-      icon: "🎵",
-      connected: false,
-      description: "Access your Spotify playlists and music library",
-    },
-    {
-      name: "YouTube Music",
-      icon: "🎬",
-      connected: false,
-      description: "Import playlists from YouTube Music",
-    },
-    {
-      name: "Apple Music",
-      icon: "🍎",
-      connected: false,
-      description: "Connect your Apple Music playlists",
-    },
-  ])
+  useEffect(() => {
+    const loadUser = async () => {
+      const currentUser = await getCurrentUser()
+      setUser(currentUser)
+      
+      if (currentUser) {
+        // 사용자의 노래 목록 로드
+        const songs = await getAvailableSongs()
+        const songTitles = songs.map(song => `${song.title} - ${song.artist}`)
+        setProcessedSongs(songTitles)
+      }
+    }
+    loadUser()
+  }, [])
 
-  const [isConnecting, setIsConnecting] = useState<string | null>(null)
-
-  const handleConnect = async (serviceName: string) => {
-    setIsConnecting(serviceName)
-
-    // Simulate OAuth flow
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-
-    setServices((prev) =>
-      prev.map((service) =>
-        service.name === serviceName
-          ? { ...service, connected: true, playlists: Math.floor(Math.random() * 50) + 10 }
-          : service,
-      ),
+  // 인증되지 않은 사용자 처리
+  if (user === null) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50/40 via-white/80 to-gray-50/20 dark:from-gray-950/60 dark:via-gray-900/80 dark:to-gray-950/40 flex items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardContent className="text-center p-8">
+            <h2 className="text-xl font-bold mb-2">로그인이 필요합니다</h2>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
+              YouTube URL을 처리하려면 로그인해야 합니다.
+            </p>
+            <Link href="/login">
+              <Button>로그인하기</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
     )
-    setIsConnecting(null)
   }
 
-  const handleDisconnect = (serviceName: string) => {
-    setServices((prev) =>
-      prev.map((service) =>
-        service.name === serviceName ? { ...service, connected: false, playlists: undefined } : service,
-      ),
-    )
+  const handleProcessUrls = async () => {
+    setIsProcessing(true)
+    setShowProgressModal(true)
+    setProcessedSongs([])
+    
+    try {
+      // URL 텍스트를 줄별로 파싱
+      const urls = urlInput
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line && !line.startsWith('#') && line.includes('youtube.com'))
+      
+      if (urls.length === 0) {
+        alert('유효한 YouTube URL을 입력해주세요.')
+        return
+      }
+      
+      // API 호출 (인증 토큰 포함)
+      const session = await getSession()
+      const token = session?.access_token
+      
+      if (!token) {
+        alert('인증 토큰이 없습니다. 다시 로그인해주세요.')
+        return
+      }
+
+      const response = await fetch('/api/process-urls', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ urls })
+      })
+      
+      const result = await response.json()
+      
+      if (result.success) {
+        // 처리된 노래 목록 다시 로드
+        try {
+          const songs = await getAvailableSongs()
+          const songTitles = songs.map(song => `${song.title} - ${song.artist}`)
+          setProcessedSongs(songTitles)
+        } catch (error) {
+          console.error('Failed to load processed songs:', error)
+          setProcessedSongs(['Processing completed - check create game page'])
+        }
+      } else {
+        throw new Error(result.error || 'Processing failed')
+      }
+      
+    } catch (error) {
+      console.error('Error processing URLs:', error)
+      alert(`처리 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`)
+    } finally {
+      setIsProcessing(false)
+      // 모달은 완료 후에도 유지 (사용자가 직접 닫음)
+    }
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50/40 via-white/80 to-gray-50/20 dark:from-gray-950/60 dark:via-gray-900/80 dark:to-gray-950/40">
-      <div className="container mx-auto px-4 py-6 sm:py-8 max-w-6xl">
+      <div className="container mx-auto px-4 py-6 sm:py-8 max-w-4xl">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6 sm:mb-8">
           <Link href="/">
@@ -78,130 +128,142 @@ export default function AuthPage() {
             </Button>
           </Link>
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">Connect Your Music</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">YouTube 음악 가져오기</h1>
             <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300">
-              Link your streaming accounts to import playlists
+              음악 퀴즈를 만들기 위해 YouTube URL을 추가하세요
             </p>
           </div>
         </div>
 
-        {/* Connected Services */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
-          {services.map((service) => (
-            <Card
-              key={service.name}
-              className="relative bg-white/70 dark:bg-gray-800/50 backdrop-blur-sm border-gray-200/60 dark:border-gray-700/60 hover:border-gray-300/80 dark:hover:border-gray-600/80 transition-all duration-300"
-            >
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <div className="p-2 bg-gradient-to-br from-blue-500/10 to-purple-500/10 dark:from-blue-400/15 dark:to-purple-400/15 rounded-lg border border-blue-200/20 dark:border-blue-400/20">
-                      <span className="text-xl">{service.icon}</span>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <CardTitle className="text-base sm:text-lg truncate">{service.name}</CardTitle>
-                      <CardDescription className="text-xs sm:text-sm line-clamp-2">
-                        {service.connected ? `${service.playlists} playlists available` : service.description}
-                      </CardDescription>
-                    </div>
-                  </div>
-                  {service.connected && (
-                    <Badge
-                      variant="secondary"
-                      className="bg-green-100/80 text-green-800 dark:bg-green-900/50 dark:text-green-200 ml-2"
-                    >
-                      <CheckCircle className="h-3 w-3 mr-1" />
-                      <span className="hidden sm:inline">Connected</span>
-                      <span className="sm:hidden">✓</span>
-                    </Badge>
-                  )}
-                </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Main Form */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* URL Input */}
+            <Card className="bg-white/70 dark:bg-gray-800/50 backdrop-blur-sm border-gray-200/60 dark:border-gray-700/60">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Youtube className="h-5 w-5 text-red-600" />
+                  YouTube URLs
+                </CardTitle>
+                <CardDescription>
+                  YouTube 음악 URL을 입력하세요 (한 줄에 하나씩) 또는 플레이리스트 URL
+                </CardDescription>
               </CardHeader>
-              <CardContent className="pt-0">
-                {service.connected ? (
-                  <div className="space-y-3">
-                    <div className="flex gap-2">
-                      <Link href="/import-playlist" className="flex-1">
-                        <Button
-                          className="w-full bg-gradient-to-r from-blue-500/90 to-purple-500/90 hover:from-blue-600 hover:to-purple-600"
-                          size="sm"
-                        >
-                          <Music className="h-4 w-4 mr-2" />
-                          Import Playlists
-                        </Button>
-                      </Link>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full border-gray-200/60 dark:border-gray-700/60"
-                      onClick={() => handleDisconnect(service.name)}
-                    >
-                      Disconnect
-                    </Button>
-                  </div>
-                ) : (
-                  <Button
-                    className="w-full bg-gradient-to-r from-gray-600/90 to-gray-700/90 hover:from-gray-700 hover:to-gray-800"
-                    onClick={() => handleConnect(service.name)}
-                    disabled={isConnecting === service.name}
-                  >
-                    {isConnecting === service.name ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Connecting...
-                      </>
-                    ) : (
-                      `Connect ${service.name}`
-                    )}
-                  </Button>
-                )}
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="url-input">YouTube URL</Label>
+                  <Textarea
+                    id="url-input"
+                    placeholder="https://www.youtube.com/watch?v=fJ9rUzIMcZQ&#10;https://www.youtube.com/watch?v=DyDfgMOUjCI&#10;or&#10;https://www.youtube.com/playlist?list=..."
+                    value={urlInput}
+                    onChange={(e) => setUrlInput(e.target.value)}
+                    rows={8}
+                    className="font-mono text-sm"
+                  />
+                </div>
+                <Button
+                  onClick={handleProcessUrls}
+                  disabled={!urlInput.trim() || isProcessing}
+                  className="w-full bg-gradient-to-r from-red-500/90 to-pink-500/90 hover:from-red-600 hover:to-pink-600"
+                >
+                  {isProcessing ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      처리 중...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="h-4 w-4 mr-2" />
+                      URL 처리하기
+                    </>
+                  )}
+                </Button>
               </CardContent>
             </Card>
-          ))}
-        </div>
 
-        {/* OAuth Info */}
-        <Card className="border-gray-200/50 dark:border-gray-700/50 bg-white/60 dark:bg-gray-800/40 backdrop-blur-sm">
-          <CardHeader>
-            <CardTitle className="text-lg sm:text-xl">How it works</CardTitle>
-            <CardDescription className="text-sm sm:text-base">
-              Secure authentication with your music streaming services
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-              <div className="text-center">
-                <div className="p-3 bg-gradient-to-br from-blue-500/10 to-purple-500/10 dark:from-blue-400/15 dark:to-purple-400/15 rounded-full w-fit mx-auto mb-3 border border-blue-200/20 dark:border-blue-400/20">
-                  <Shield className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+            {/* Processed Songs */}
+            {processedSongs.length > 0 && (
+              <Card className="bg-white/70 dark:bg-gray-800/50 backdrop-blur-sm border-gray-200/60 dark:border-gray-700/60">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <List className="h-5 w-5 text-green-600" />
+                    처리된 노래
+                  </CardTitle>
+                  <CardDescription>
+                    {processedSongs.length}곡이 퀴즈 생성을 위해 준비되었습니다
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {processedSongs.map((song, index) => (
+                      <div key={index} className="flex items-center gap-3 p-3 bg-gray-50/50 dark:bg-gray-700/50 rounded-lg">
+                        <Music className="h-4 w-4 text-gray-500" />
+                        <span className="flex-1 text-sm">{song}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 flex gap-2">
+                    <Link href="/create-game" className="flex-1">
+                      <Button className="w-full bg-gradient-to-r from-blue-500/90 to-purple-500/90 hover:from-blue-600 hover:to-purple-600">
+                        퀴즈 만들기
+                      </Button>
+                    </Link>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          {/* Sidebar */}
+          <div className="space-y-6">
+            {/* Instructions */}
+            <Card className="bg-white/60 dark:bg-gray-800/40 backdrop-blur-sm border-gray-200/50 dark:border-gray-700/50">
+              <CardHeader>
+                <CardTitle className="text-lg">작동 방법</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4 text-sm">
+                <div className="flex items-start gap-3">
+                  <div className="w-6 h-6 bg-blue-100 dark:bg-blue-900/50 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-blue-600 dark:text-blue-400 text-xs font-bold">1</span>
+                  </div>
+                  <div>
+                    <p className="font-medium">URL 추가</p>
+                    <p className="text-gray-600 dark:text-gray-400">YouTube 음악 URL이나 플레이리스트 링크를 붙여넣으세요</p>
+                  </div>
                 </div>
-                <h3 className="font-semibold mb-2 text-sm sm:text-base">Secure Login</h3>
-                <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
-                  We use OAuth 2.0 to securely connect to your accounts without storing your passwords
-                </p>
-              </div>
-              <div className="text-center">
-                <div className="p-3 bg-gradient-to-br from-green-500/10 to-emerald-500/10 dark:from-green-400/15 dark:to-emerald-400/15 rounded-full w-fit mx-auto mb-3 border border-green-200/20 dark:border-green-400/20">
-                  <Eye className="h-6 w-6 text-green-600 dark:text-green-400" />
+                <div className="flex items-start gap-3">
+                  <div className="w-6 h-6 bg-blue-100 dark:bg-blue-900/50 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-blue-600 dark:text-blue-400 text-xs font-bold">2</span>
+                  </div>
+                  <div>
+                    <p className="font-medium">다운로드 & 처리</p>
+                    <p className="text-gray-600 dark:text-gray-400">노래가 다운로드되고 10-15초 클립이 생성됩니다</p>
+                  </div>
                 </div>
-                <h3 className="font-semibold mb-2 text-sm sm:text-base">Read-Only Access</h3>
-                <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
-                  We only request permission to read your playlists, never to modify them
-                </p>
-              </div>
-              <div className="text-center sm:col-span-2 lg:col-span-1">
-                <div className="p-3 bg-gradient-to-br from-purple-500/10 to-pink-500/10 dark:from-purple-400/15 dark:to-pink-400/15 rounded-full w-fit mx-auto mb-3 border border-purple-200/20 dark:border-purple-400/20">
-                  <Music className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                <div className="flex items-start gap-3">
+                  <div className="w-6 h-6 bg-blue-100 dark:bg-blue-900/50 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-blue-600 dark:text-blue-400 text-xs font-bold">3</span>
+                  </div>
+                  <div>
+                    <p className="font-medium">퀴즈 만들기</p>
+                    <p className="text-gray-600 dark:text-gray-400">퀴즈 문제가 자동으로 생성됩니다</p>
+                  </div>
                 </div>
-                <h3 className="font-semibold mb-2 text-sm sm:text-base">Import Playlists</h3>
-                <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
-                  Once connected, you can import any of your playlists to create quizzes
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
+
+      {/* 진행률 모달 */}
+      <ProcessingProgressModal
+        isOpen={showProgressModal}
+        onClose={() => setShowProgressModal(false)}
+        onCancel={() => {
+          setIsProcessing(false)
+          setShowProgressModal(false)
+        }}
+      />
     </div>
   )
 }

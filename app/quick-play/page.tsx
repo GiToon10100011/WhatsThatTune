@@ -1,67 +1,114 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Play, Shuffle, Clock, Music, Zap, Target } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ArrowLeft, Youtube, Zap, Music, Settings, Play } from "lucide-react"
 import Link from "next/link"
+import { getCurrentUser, getSession } from "@/lib/auth"
+import { ProcessingProgressModal } from "@/components/processing-progress-modal"
 
 export default function QuickPlayPage() {
-  const [isStarting, setIsStarting] = useState(false)
-  const [selectedOption, setSelectedOption] = useState<string | null>(null)
+  const [youtubeUrl, setYoutubeUrl] = useState("")
+  const [difficulty, setDifficulty] = useState("medium")
+  const [questionCount, setQuestionCount] = useState(5)
+  const [isPublic, setIsPublic] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [user, setUser] = useState<any>(null)
+  const [showProgressModal, setShowProgressModal] = useState(false)
 
-  const quickPlayOptions = [
-    {
-      id: "mixed",
-      title: "Mixed Genres",
-      description: "A variety of songs from different genres and eras",
-      difficulty: "Medium",
-      songCount: 15,
-      duration: "5-8 min",
-      icon: Shuffle,
-      color: "from-blue-500/10 to-purple-500/10 dark:from-blue-400/15 dark:to-purple-400/15",
-      borderColor: "border-blue-200/20 dark:border-blue-400/20",
-      iconColor: "text-blue-600 dark:text-blue-400",
-    },
-    {
-      id: "popular",
-      title: "Popular Hits",
-      description: "Chart-topping songs from recent years",
-      difficulty: "Easy",
-      songCount: 12,
-      duration: "4-6 min",
-      icon: Zap,
-      color: "from-emerald-500/10 to-green-500/10 dark:from-emerald-400/15 dark:to-green-400/15",
-      borderColor: "border-emerald-200/20 dark:border-emerald-400/20",
-      iconColor: "text-emerald-600 dark:text-emerald-400",
-    },
-    {
-      id: "classics",
-      title: "Classic Rock",
-      description: "Timeless rock anthems and legendary ballads",
-      difficulty: "Hard",
-      songCount: 20,
-      duration: "7-10 min",
-      icon: Target,
-      color: "from-orange-500/10 to-red-500/10 dark:from-orange-400/15 dark:to-red-400/15",
-      borderColor: "border-orange-200/20 dark:border-orange-400/20",
-      iconColor: "text-orange-600 dark:text-orange-400",
-    },
-  ]
+  useEffect(() => {
+    const loadUser = async () => {
+      const currentUser = await getCurrentUser()
+      setUser(currentUser)
+    }
+    loadUser()
+  }, [])
 
-  const handleStartQuickPlay = (optionId: string) => {
-    setSelectedOption(optionId)
-    setIsStarting(true)
-    // Simulate loading and redirect to game
-    setTimeout(() => {
-      window.location.href = `/play/quick-${optionId}`
-    }, 1500)
+  // 인증되지 않은 사용자 처리
+  if (user === null) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50/40 via-white/80 to-gray-50/20 dark:from-gray-950/60 dark:via-gray-900/80 dark:to-gray-950/40 flex items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardContent className="text-center p-8">
+            <h2 className="text-xl font-bold mb-2">로그인이 필요합니다</h2>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
+              Quick Play를 사용하려면 로그인해야 합니다.
+            </p>
+            <Link href="/login">
+              <Button>로그인하기</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  const handleQuickPlay = async () => {
+    if (!youtubeUrl.trim()) {
+      alert('YouTube URL을 입력해주세요.')
+      return
+    }
+
+    if (!youtubeUrl.includes('youtube.com') && !youtubeUrl.includes('youtu.be')) {
+      alert('유효한 YouTube URL을 입력해주세요.')
+      return
+    }
+
+    setIsProcessing(true)
+    setShowProgressModal(true)
+
+    try {
+      // 1. URL 처리 API 호출
+      const session = await getSession()
+      const token = session?.access_token
+
+      if (!token) {
+        alert('인증 토큰이 없습니다. 다시 로그인해주세요.')
+        return
+      }
+
+      const response = await fetch('/api/process-urls', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ 
+          urls: [youtubeUrl],
+          quickPlay: true,
+          difficulty,
+          questionCount,
+          isPublic
+        })
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        // 2. 자동으로 퀴즈 생성 및 게임 시작
+        alert(`퀴즈가 생성되었습니다! ${result.gameId ? `게임 ID: ${result.gameId}` : ''}`)
+        if (result.gameId) {
+          window.location.href = `/play/${result.gameId}`
+        }
+      } else {
+        throw new Error(result.error || 'Processing failed')
+      }
+    } catch (error) {
+      console.error('Error in quick play:', error)
+      alert(`처리 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`)
+    } finally {
+      setIsProcessing(false)
+      // 모달은 완료 후에도 유지 (사용자가 직접 닫음)
+    }
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50/40 via-white/80 to-gray-50/20 dark:from-gray-950/60 dark:via-gray-900/80 dark:to-gray-950/40">
-      <div className="container mx-auto px-4 py-6 sm:py-8 max-w-6xl">
+      <div className="container mx-auto px-4 py-6 sm:py-8 max-w-4xl">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6 sm:mb-8">
           <Link href="/">
@@ -74,134 +121,186 @@ export default function QuickPlayPage() {
             </Button>
           </Link>
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">Quick Play</h1>
-            <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300">Jump into a quiz without setup</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">빠른 플레이</h1>
+            <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300">
+              YouTube URL → 자동 퀴즈 생성 → 바로 플레이
+            </p>
           </div>
         </div>
 
-        {/* Quick Play Options */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
-          {quickPlayOptions.map((option) => {
-            const IconComponent = option.icon
-            return (
-              <Card
-                key={option.id}
-                className={`hover:shadow-lg transition-all duration-300 border-gray-200/50 dark:border-gray-700/50 hover:border-gray-300/70 dark:hover:border-gray-600/70 bg-white/70 dark:bg-gray-800/50 backdrop-blur-sm ${
-                  selectedOption === option.id && isStarting ? "ring-2 ring-blue-500/50" : ""
-                }`}
-              >
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <div className={`p-2 bg-gradient-to-br ${option.color} rounded-lg border ${option.borderColor}`}>
-                        <IconComponent className={`h-5 w-5 ${option.iconColor}`} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <CardTitle className="text-base sm:text-lg truncate">{option.title}</CardTitle>
-                        <CardDescription className="text-xs sm:text-sm line-clamp-2">
-                          {option.description}
-                        </CardDescription>
-                      </div>
-                    </div>
-                    <Badge
-                      variant={
-                        option.difficulty === "Easy"
-                          ? "secondary"
-                          : option.difficulty === "Medium"
-                            ? "default"
-                            : "destructive"
-                      }
-                      className="text-xs ml-2"
-                    >
-                      {option.difficulty}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-2 text-xs sm:text-sm text-gray-600 dark:text-gray-400">
-                      <span className="flex items-center gap-1">
-                        <Music className="h-3 w-3" />
-                        {option.songCount} songs
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {option.duration}
-                      </span>
-                    </div>
-                    <Button
-                      className="w-full bg-gradient-to-r from-gray-600/90 to-gray-700/90 hover:from-gray-700 hover:to-gray-800 text-white border-0"
-                      onClick={() => handleStartQuickPlay(option.id)}
-                      disabled={isStarting}
-                      size="sm"
-                    >
-                      {isStarting && selectedOption === option.id ? (
-                        <>
-                          <Shuffle className="h-4 w-4 mr-2 animate-spin" />
-                          Starting...
-                        </>
-                      ) : (
-                        <>
-                          <Play className="h-4 w-4 mr-2" />
-                          Start Quiz
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })}
-        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Main Form */}
+          <div className="lg:col-span-2 space-y-6">
+            <Card className="bg-white/70 dark:bg-gray-800/50 backdrop-blur-sm border-gray-200/60 dark:border-gray-700/60">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Zap className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                  Quick Play 생성
+                </CardTitle>
+                <CardDescription>
+                  YouTube URL 하나로 즉시 퀴즈를 만들고 플레이하세요
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* YouTube URL Input */}
+                <div className="space-y-2">
+                  <Label htmlFor="youtube-url" className="flex items-center gap-2">
+                    <Youtube className="h-4 w-4 text-red-600" />
+                    YouTube URL
+                  </Label>
+                  <Input
+                    id="youtube-url"
+                    placeholder="https://www.youtube.com/watch?v=... 또는 플레이리스트 URL"
+                    value={youtubeUrl}
+                    onChange={(e) => setYoutubeUrl(e.target.value)}
+                    className="font-mono text-sm"
+                  />
+                </div>
 
-        {/* Info Section */}
-        <Card className="border-gray-200/50 dark:border-gray-700/50 bg-white/60 dark:bg-gray-800/40 backdrop-blur-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
-              <div className="p-2 bg-gradient-to-br from-blue-500/10 to-purple-500/10 dark:from-blue-400/15 dark:to-purple-400/15 rounded-lg border border-blue-200/20 dark:border-blue-400/20">
-                <Shuffle className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-              </div>
-              How Quick Play Works
-            </CardTitle>
-            <CardDescription className="text-sm sm:text-base">No setup required - just pick and play</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-              <div className="text-center">
-                <div className="p-3 bg-gradient-to-br from-green-500/10 to-emerald-500/10 dark:from-green-400/15 dark:to-emerald-400/15 rounded-full w-fit mx-auto mb-3 border border-green-200/20 dark:border-green-400/20">
-                  <Music className="h-6 w-6 text-green-600 dark:text-green-400" />
+                {/* Quiz Settings */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="difficulty">난이도</Label>
+                    <Select value={difficulty} onValueChange={setDifficulty}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="easy">쉬움 (4개 선택지)</SelectItem>
+                        <SelectItem value="medium">보통 (6개 선택지)</SelectItem>
+                        <SelectItem value="hard">어려움 (8개 선택지)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="question-count">문제 수</Label>
+                    <Select value={questionCount.toString()} onValueChange={(v) => setQuestionCount(parseInt(v))}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="3">3문제</SelectItem>
+                        <SelectItem value="5">5문제</SelectItem>
+                        <SelectItem value="10">10문제</SelectItem>
+                        <SelectItem value="15">15문제</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-                <h3 className="font-semibold mb-2 text-gray-900 dark:text-white text-sm sm:text-base">
-                  Curated Playlists
-                </h3>
-                <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
-                  Pre-selected songs from popular streaming platforms
-                </p>
-              </div>
-              <div className="text-center">
-                <div className="p-3 bg-gradient-to-br from-orange-500/10 to-red-500/10 dark:from-orange-400/15 dark:to-red-400/15 rounded-full w-fit mx-auto mb-3 border border-orange-200/20 dark:border-orange-400/20">
-                  <Zap className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+
+                {/* 공개 설정 */}
+                <div className="flex items-center space-x-2 p-3 bg-gray-50/50 dark:bg-gray-700/50 rounded-lg">
+                  <input
+                    type="checkbox"
+                    id="is-public"
+                    checked={isPublic}
+                    onChange={(e) => setIsPublic(e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <Label htmlFor="is-public" className="text-sm">
+                    🌍 퀴즈를 공개하여 다른 사람들과 공유
+                  </Label>
                 </div>
-                <h3 className="font-semibold mb-2 text-gray-900 dark:text-white text-sm sm:text-base">Instant Start</h3>
-                <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
-                  No playlist import needed - start playing immediately
-                </p>
-              </div>
-              <div className="text-center sm:col-span-2 lg:col-span-1">
-                <div className="p-3 bg-gradient-to-br from-purple-500/10 to-pink-500/10 dark:from-purple-400/15 dark:to-pink-400/15 rounded-full w-fit mx-auto mb-3 border border-purple-200/20 dark:border-purple-400/20">
-                  <Target className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+
+                {/* Quick Play Button */}
+                <Button
+                  onClick={handleQuickPlay}
+                  disabled={!youtubeUrl.trim() || isProcessing}
+                  className="w-full bg-gradient-to-r from-orange-500/90 to-red-500/90 hover:from-orange-600 hover:to-red-600 text-white"
+                  size="lg"
+                >
+                  {isProcessing ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      처리 중...
+                    </>
+                  ) : (
+                    <>
+                      <Play className="h-4 w-4 mr-2" />
+                      퀴즈 생성하고 바로 플레이
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Sidebar */}
+          <div className="space-y-6">
+            {/* How it works */}
+            <Card className="bg-white/60 dark:bg-gray-800/40 backdrop-blur-sm border-gray-200/50 dark:border-gray-700/50">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Settings className="h-5 w-5" />
+                  Quick Play 특징
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4 text-sm">
+                <div className="flex items-start gap-3">
+                  <div className="w-6 h-6 bg-orange-100 dark:bg-orange-900/50 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-orange-600 dark:text-orange-400 text-xs font-bold">1</span>
+                  </div>
+                  <div>
+                    <p className="font-medium">즉시 생성</p>
+                    <p className="text-gray-600 dark:text-gray-400">URL 입력만으로 자동으로 퀴즈 생성</p>
+                  </div>
                 </div>
-                <h3 className="font-semibold mb-2 text-gray-900 dark:text-white text-sm sm:text-base">
-                  Challenge Yourself
-                </h3>
-                <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
-                  Test your knowledge across different genres and eras
+                <div className="flex items-start gap-3">
+                  <div className="w-6 h-6 bg-orange-100 dark:bg-orange-900/50 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-orange-600 dark:text-orange-400 text-xs font-bold">2</span>
+                  </div>
+                  <div>
+                    <p className="font-medium">바로 플레이</p>
+                    <p className="text-gray-600 dark:text-gray-400">생성 즉시 게임 화면으로 이동</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="w-6 h-6 bg-orange-100 dark:bg-orange-900/50 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-orange-600 dark:text-orange-400 text-xs font-bold">3</span>
+                  </div>
+                  <div>
+                    <p className="font-medium">설정 최소화</p>
+                    <p className="text-gray-600 dark:text-gray-400">난이도와 문제 수만 선택하면 끝</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* vs Create Game */}
+            <Card className="bg-blue-50/50 dark:bg-blue-950/20 backdrop-blur-sm border-blue-200/50 dark:border-blue-700/50">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Music className="h-5 w-5 text-blue-600" />
+                  vs 게임 만들기
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm space-y-2">
+                <p className="text-gray-700 dark:text-gray-300">
+                  <strong>게임 만들기:</strong> 여러 곡을 추가하고 세밀하게 커스터마이징
                 </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+                <p className="text-gray-700 dark:text-gray-300">
+                  <strong>Quick Play:</strong> 하나의 URL로 빠르게 즉시 플레이
+                </p>
+                <Link href="/auth" className="block mt-3">
+                  <Button variant="outline" className="w-full text-blue-600 border-blue-200">
+                    게임 만들기로 이동
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
+
+      {/* 진행률 모달 */}
+      <ProcessingProgressModal
+        isOpen={showProgressModal}
+        onClose={() => setShowProgressModal(false)}
+        onCancel={() => {
+          setIsProcessing(false)
+          setShowProgressModal(false)
+        }}
+      />
     </div>
   )
 }

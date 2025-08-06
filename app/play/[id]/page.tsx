@@ -7,15 +7,7 @@ import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, Play, Pause, SkipForward, Volume2, Share2, Clock } from "lucide-react"
 import Link from "next/link"
-
-interface Question {
-  id: number
-  audioUrl: string
-  correctAnswer: string
-  options: string[]
-  artist: string
-  album: string
-}
+import { getGameById, type QuizGame, type QuizQuestion } from "@/lib/quiz-data"
 
 export default function PlayGamePage({ params }: { params: { id: string } }) {
   const [currentQuestion, setCurrentQuestion] = useState(0)
@@ -27,33 +19,34 @@ export default function PlayGamePage({ params }: { params: { id: string } }) {
   const [gameComplete, setGameComplete] = useState(false)
   const [questionTimeLeft, setQuestionTimeLeft] = useState(15)
   const [questionTimerActive, setQuestionTimerActive] = useState(false)
+  const [game, setGame] = useState<QuizGame | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null)
 
-  const questions: Question[] = [
-    {
-      id: 1,
-      audioUrl: "/placeholder-audio.mp3",
-      correctAnswer: "Bohemian Rhapsody",
-      options: ["Bohemian Rhapsody", "We Will Rock You", "Don't Stop Me Now", "Another One Bites the Dust"],
-      artist: "Queen",
-      album: "A Night at the Opera",
-    },
-    {
-      id: 2,
-      audioUrl: "/placeholder-audio.mp3",
-      correctAnswer: "Hotel California",
-      options: ["Hotel California", "Take It Easy", "Life in the Fast Lane", "Desperado"],
-      artist: "Eagles",
-      album: "Hotel California",
-    },
-    {
-      id: 3,
-      audioUrl: "/placeholder-audio.mp3",
-      correctAnswer: "Stairway to Heaven",
-      options: ["Stairway to Heaven", "Black Dog", "Kashmir", "Whole Lotta Love"],
-      artist: "Led Zeppelin",
-      album: "Led Zeppelin IV",
-    },
-  ]
+  useEffect(() => {
+    loadGame()
+  }, [params.id])
+
+  const loadGame = async () => {
+    try {
+      // 먼저 로컬 스토리지에서 확인
+      const createdGames = JSON.parse(localStorage.getItem('created-games') || '[]')
+      let foundGame = createdGames.find((g: QuizGame) => g.id === params.id)
+      
+      if (!foundGame) {
+        // 기본 게임에서 확인
+        foundGame = await getGameById(params.id)
+      }
+      
+      setGame(foundGame)
+    } catch (error) {
+      console.error('Failed to load game:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const questions = game?.questions || []
 
   const currentQ = questions[currentQuestion]
   const progress = ((currentQuestion + 1) / questions.length) * 100
@@ -78,8 +71,19 @@ export default function PlayGamePage({ params }: { params: { id: string } }) {
   }, [questionTimerActive, questionTimeLeft, showResult])
 
   const handlePlay = () => {
-    setIsPlaying(true)
-    setTimeLeft(3) // Reset to snippet duration from settings
+    if (currentQ) {
+      const audio = new Audio(currentQ.clip)
+      setAudioElement(audio)
+      
+      audio.play()
+      setIsPlaying(true)
+      setTimeLeft(15) // 15초 클립 재생
+      
+      audio.onended = () => {
+        setIsPlaying(false)
+        setQuestionTimerActive(true)
+      }
+    }
   }
 
   const handleAnswer = (answer: string) => {
@@ -94,16 +98,52 @@ export default function PlayGamePage({ params }: { params: { id: string } }) {
   }
 
   const handleNext = () => {
+    // 현재 재생 중인 오디오 정지
+    if (audioElement) {
+      audioElement.pause()
+      audioElement.currentTime = 0
+    }
+    
     if (currentQuestion < questions.length - 1) {
       setCurrentQuestion(currentQuestion + 1)
       setSelectedAnswer(null)
       setShowResult(false)
-      setTimeLeft(3)
+      setIsPlaying(false)
+      setTimeLeft(15)
       setQuestionTimeLeft(15)
       setQuestionTimerActive(false)
     } else {
       setGameComplete(true)
     }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50/40 via-white/80 to-gray-50/20 dark:from-gray-950/60 dark:via-gray-900/80 dark:to-gray-950/40 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Loading game...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!game || questions.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50/40 via-white/80 to-gray-50/20 dark:from-gray-950/60 dark:via-gray-900/80 dark:to-gray-950/40 flex items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardContent className="text-center p-8">
+            <h2 className="text-xl font-bold mb-2">게임을 찾을 수 없습니다</h2>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
+              요청한 게임이 존재하지 않거나 삭제되었습니다.
+            </p>
+            <Link href="/">
+              <Button>홈으로 돌아가기</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   const handleShare = () => {

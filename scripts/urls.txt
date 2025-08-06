@@ -1,0 +1,6 @@
+# YouTube URL들을 여기에 입력하세요 (한 줄에 하나씩)
+# 플레이리스트 URL도 지원됩니다
+# 예시:
+# https://www.youtube.com/watch?v=fJ9rUzIMcZQ
+# https://www.youtube.com/watch?v=DyDfgMOUjCI
+# https://www.youtube.com/playlist?list=PLxxxxxxxxxxx

@@ -31,13 +31,41 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import Link from "next/link";
 
 export default function SettingsPage() {
-  const [snippetDuration, setSnippetDuration] = useState([3]);
+  const [snippetDuration, setSnippetDuration] = useState([15]);
   const [autoPlay, setAutoPlay] = useState(true);
   const [showHints, setShowHints] = useState(false);
   const [difficulty, setDifficulty] = useState("medium");
   const [theme, setTheme] = useState("system");
   const [questionTimer, setQuestionTimer] = useState(true);
   const [timerDuration, setTimerDuration] = useState([15]);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // 설정 저장 함수
+  const handleSaveSettings = async () => {
+    setIsSaving(true);
+    try {
+      const response = await fetch('/api/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          snippetDuration: snippetDuration[0]
+        })
+      });
+
+      if (response.ok) {
+        alert('설정이 저장되었습니다!');
+      } else {
+        alert('설정 저장에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('Settings save error:', error);
+      alert('설정 저장 중 오류가 발생했습니다.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50/80 via-white/90 to-emerald-50/60 dark:from-slate-950/90 dark:via-gray-900/95 dark:to-emerald-950/80 relative overflow-hidden">
@@ -59,10 +87,10 @@ export default function SettingsPage() {
           </Link>
           <div className="flex-1">
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
-              Settings
+              설정
             </h1>
             <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300">
-              Customize your music quiz experience
+              음악 퀴즈 경험을 사용자 지정하세요
             </p>
           </div>
           <ThemeToggle />
@@ -77,43 +105,43 @@ export default function SettingsPage() {
                   <Volume2 className="h-5 w-5 text-purple-600 dark:text-purple-400" />
                 </div>
                 <CardTitle className="text-lg text-gray-900 dark:text-white">
-                  Audio Settings
+                  오디오 설정
                 </CardTitle>
               </div>
               <CardDescription className="text-gray-600 dark:text-gray-400">
-                Configure how music snippets are played
+                음악 조각이 재생되는 방식을 설정하세요
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-3">
                 <Label className="text-base font-medium text-gray-900 dark:text-white">
-                  Snippet Duration: {snippetDuration[0]} second
+                  클립 재생 시간: {snippetDuration[0]}초
                   {snippetDuration[0] !== 1 ? "s" : ""}
                 </Label>
                 <Slider
                   value={snippetDuration}
                   onValueChange={setSnippetDuration}
-                  max={5}
-                  min={1}
+                  max={30}
+                  min={3}
                   step={1}
                   className="w-full"
                 />
                 <div className="flex justify-between text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-                  <span>1s</span>
-                  <span>2s</span>
-                  <span>3s</span>
-                  <span>4s</span>
-                  <span>5s</span>
+                  <span>3초</span>
+                  <span>10초</span>
+                  <span>15초</span>
+                  <span>20초</span>
+                  <span>30초</span>
                 </div>
               </div>
 
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <Label className="text-base font-medium text-gray-900 dark:text-white">
-                    Auto-play snippets
+                    자동 재생
                   </Label>
                   <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
-                    Automatically play the next snippet after answering
+                    답변 후 다음 조각을 자동으로 재생합니다
                   </p>
                 </div>
                 <Switch checked={autoPlay} onCheckedChange={setAutoPlay} />
@@ -129,26 +157,26 @@ export default function SettingsPage() {
                   <Gamepad2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                 </div>
                 <CardTitle className="text-lg text-gray-900 dark:text-white">
-                  Game Settings
+                  게임 설정
                 </CardTitle>
               </div>
               <CardDescription className="text-gray-600 dark:text-gray-400">
-                Adjust gameplay preferences
+                게임플레이 설정을 조정하세요
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-3">
                 <Label className="text-base font-medium text-gray-900 dark:text-white">
-                  Default Difficulty
+                  기본 난이도
                 </Label>
                 <Select value={difficulty} onValueChange={setDifficulty}>
                   <SelectTrigger className="bg-white/60 dark:bg-gray-800/60 border-gray-200/60 dark:border-gray-700/60">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="easy">Easy - 4 choices</SelectItem>
-                    <SelectItem value="medium">Medium - 6 choices</SelectItem>
-                    <SelectItem value="hard">Hard - 8 choices</SelectItem>
+                    <SelectItem value="easy">쉬움 - 4개 선택지</SelectItem>
+                    <SelectItem value="medium">보통 - 6개 선택지</SelectItem>
+                    <SelectItem value="hard">어려움 - 8개 선택지</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -156,10 +184,10 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <Label className="text-base font-medium text-gray-900 dark:text-white">
-                    Show hints
+                    힌트 보이기
                   </Label>
                   <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
-                    Display artist name or album cover as hints
+                    힌트로 아티스트 이름이나 앨범 커버를 표시합니다
                   </p>
                 </div>
                 <Switch checked={showHints} onCheckedChange={setShowHints} />
@@ -175,21 +203,21 @@ export default function SettingsPage() {
                   <Clock className="h-5 w-5 text-orange-600 dark:text-orange-400" />
                 </div>
                 <CardTitle className="text-lg text-gray-900 dark:text-white">
-                  Timer Settings
+                  타이머 설정
                 </CardTitle>
               </div>
               <CardDescription className="text-gray-600 dark:text-gray-400">
-                Configure question timing
+                문제 시간 설정을 구성하세요
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <Label className="text-base font-medium text-gray-900 dark:text-white">
-                    Enable question timer
+                    문제 타이머 사용
                   </Label>
                   <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
-                    Add time pressure to each question
+                    각 문제에 시간 제한을 추가합니다
                   </p>
                 </div>
                 <Switch
@@ -201,7 +229,7 @@ export default function SettingsPage() {
               {questionTimer && (
                 <div className="space-y-3">
                   <Label className="text-base font-medium text-gray-900 dark:text-white">
-                    Timer Duration: {timerDuration[0]} seconds
+                    타이머 시간: {timerDuration[0]}초
                   </Label>
                   <Slider
                     value={timerDuration}
@@ -229,26 +257,26 @@ export default function SettingsPage() {
                   <Palette className="h-5 w-5 text-green-600 dark:text-green-400" />
                 </div>
                 <CardTitle className="text-lg text-gray-900 dark:text-white">
-                  Appearance
+                  모양
                 </CardTitle>
               </div>
               <CardDescription className="text-gray-600 dark:text-gray-400">
-                Customize the app's look and feel
+                앱의 디자인과 느낌을 사용자 지정하세요
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-3">
                 <Label className="text-base font-medium text-gray-900 dark:text-white">
-                  Theme
+                  테마
                 </Label>
                 <Select value={theme} onValueChange={setTheme}>
                   <SelectTrigger className="bg-white/60 dark:bg-gray-800/60 border-gray-200/60 dark:border-gray-700/60">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="light">Light</SelectItem>
-                    <SelectItem value="dark">Dark</SelectItem>
-                    <SelectItem value="system">System</SelectItem>
+                    <SelectItem value="light">라이트</SelectItem>
+                    <SelectItem value="dark">다크</SelectItem>
+                    <SelectItem value="system">시스템</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -258,19 +286,19 @@ export default function SettingsPage() {
                   variant="outline"
                   className="w-full justify-start border-gray-200/60 dark:border-gray-700/60 bg-white/60 dark:bg-gray-800/40 backdrop-blur-sm"
                 >
-                  Export Settings
+                  설정 내보내기
                 </Button>
                 <Button
                   variant="outline"
                   className="w-full justify-start border-gray-200/60 dark:border-gray-700/60 bg-white/60 dark:bg-gray-800/40 backdrop-blur-sm"
                 >
-                  Import Settings
+                  설정 가져오기
                 </Button>
                 <Button
                   variant="outline"
                   className="w-full justify-start text-red-600 hover:text-red-700 border-red-200/60 dark:border-red-700/60 bg-white/60 dark:bg-gray-800/40 backdrop-blur-sm"
                 >
-                  Reset to Defaults
+                  기본값으로 초기화
                 </Button>
               </div>
             </CardContent>
@@ -281,10 +309,21 @@ export default function SettingsPage() {
         <div className="mt-6 sm:mt-8 flex justify-end">
           <Button
             size="lg"
+            onClick={handleSaveSettings}
+            disabled={isSaving}
             className="px-6 sm:px-8 bg-gradient-to-r from-blue-500/90 to-purple-500/90 hover:from-blue-600 hover:to-purple-600"
           >
-            <Save className="h-4 w-4 mr-2" />
-            Save Settings
+            {isSaving ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                저장 중...
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4 mr-2" />
+                설정 저장
+              </>
+            )}
           </Button>
         </div>
       </div>
