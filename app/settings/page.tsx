@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -31,14 +31,37 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import Link from "next/link";
 
 export default function SettingsPage() {
-  const [snippetDuration, setSnippetDuration] = useState([15]);
+  const [snippetDuration, setSnippetDuration] = useState([10]); // 최대 10초로 제한
   const [autoPlay, setAutoPlay] = useState(true);
   const [showHints, setShowHints] = useState(false);
   const [difficulty, setDifficulty] = useState("medium");
   const [theme, setTheme] = useState("system");
   const [questionTimer, setQuestionTimer] = useState(true);
   const [timerDuration, setTimerDuration] = useState([15]);
+  const [cleanupFullDownloads, setCleanupFullDownloads] = useState(true);
+  const [downloadOnlyClipDuration, setDownloadOnlyClipDuration] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // 설정 로드
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const response = await fetch('/api/settings');
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success && result.settings) {
+            setSnippetDuration([result.settings.clip_duration || 10]);
+            setCleanupFullDownloads(result.settings.cleanup_full_downloads !== false);
+            setDownloadOnlyClipDuration(result.settings.download_only_clip_duration === true);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load settings:', error);
+      }
+    };
+    
+    loadSettings();
+  }, []);
 
   // 설정 저장 함수
   const handleSaveSettings = async () => {
@@ -50,7 +73,9 @@ export default function SettingsPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          snippetDuration: snippetDuration[0]
+          clip_duration: snippetDuration[0],
+          cleanup_full_downloads: cleanupFullDownloads,
+          download_only_clip_duration: downloadOnlyClipDuration
         })
       });
 
@@ -121,17 +146,16 @@ export default function SettingsPage() {
                 <Slider
                   value={snippetDuration}
                   onValueChange={setSnippetDuration}
-                  max={30}
+                  max={10}
                   min={3}
                   step={1}
                   className="w-full"
                 />
                 <div className="flex justify-between text-xs sm:text-sm text-gray-500 dark:text-gray-400">
                   <span>3초</span>
-                  <span>10초</span>
-                  <span>15초</span>
-                  <span>20초</span>
-                  <span>30초</span>
+                  <span>5초</span>
+                  <span>7초</span>
+                  <span>10초 (최대)</span>
                 </div>
               </div>
 
@@ -145,6 +169,30 @@ export default function SettingsPage() {
                   </p>
                 </div>
                 <Switch checked={autoPlay} onCheckedChange={setAutoPlay} />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <Label className="text-base font-medium text-gray-900 dark:text-white">
+                    전체 파일 자동 삭제
+                  </Label>
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                    클립 생성 후 원본 파일을 삭제하여 공간을 절약합니다
+                  </p>
+                </div>
+                <Switch checked={cleanupFullDownloads} onCheckedChange={setCleanupFullDownloads} />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <Label className="text-base font-medium text-gray-900 dark:text-white">
+                    클립 길이만 다운로드
+                  </Label>
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                    전체 파일 대신 클립 구간만 다운로드합니다 (실험적 기능)
+                  </p>
+                </div>
+                <Switch checked={downloadOnlyClipDuration} onCheckedChange={setDownloadOnlyClipDuration} />
               </div>
             </CardContent>
           </Card>

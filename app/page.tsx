@@ -338,6 +338,26 @@ export default function HomePage() {
 
 // Game Card Component
 function GameCard({ game }: { game: Game }) {
+  const handleShare = () => {
+    // Implement sharing functionality
+    const shareUrl = `${window.location.origin}/play/${game.id}`
+    navigator.share?.({
+      title: `음악 퀴즈: ${game.name}`,
+      text: `${game.songCount}개의 노래로 이루어진 ${game.difficulty} 난이도 퀴즈에 도전해보세요!`,
+      url: shareUrl,
+    })
+      .catch(() => {
+        // Fallback: copy to clipboard
+        navigator.clipboard?.writeText(shareUrl)
+          .then(() => {
+            alert('퀴즈 링크가 클립보드에 복사되었습니다!')
+          })
+          .catch(() => {
+            alert(`퀴즈 링크: ${shareUrl}`)
+          })
+      })
+  }
+
   return (
     <Card className="hover:shadow-lg transition-all duration-300 bg-white/80 dark:bg-gray-800/60 backdrop-blur-sm border-gray-200/60 dark:border-gray-700/60 hover:border-gray-300/80 dark:hover:border-gray-600/80 group">
       <CardHeader className="pb-3">
@@ -397,6 +417,7 @@ function GameCard({ game }: { game: Game }) {
             <Button
               variant="outline"
               size="sm"
+              onClick={handleShare}
               className="border-gray-200/60 dark:border-gray-700/60 bg-white/60 dark:bg-gray-800/40 backdrop-blur-sm"
             >
               <Share2 className="h-4 w-4" />

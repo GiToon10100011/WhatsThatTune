@@ -1,0 +1,6 @@
+{
+  "clip_duration": 10,
+  "clip_start_offset": 30,
+  "cleanup_full_downloads": true,
+  "download_only_clip_duration": false
+}

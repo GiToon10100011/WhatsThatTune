@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
+import { Slider } from "@/components/ui/slider"
 import { ArrowLeft, Play, Pause, SkipForward, Volume2, Share2, Clock } from "lucide-react"
 import Link from "next/link"
 import { getGameById, type QuizGame, type QuizQuestion } from "@/lib/quiz-data"
 
-export default function PlayGamePage({ params }: { params: { id: string } }) {
+export default function PlayGamePage({ params }: { params: Promise<{ id: string }> }) {
   const [currentQuestion, setCurrentQuestion] = useState(0)
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -22,20 +23,27 @@ export default function PlayGamePage({ params }: { params: { id: string } }) {
   const [game, setGame] = useState<QuizGame | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null)
+  const [gameId, setGameId] = useState<string>('')
+  const [volume, setVolume] = useState<number>(0.7) // 기본 볼륨 70%
 
   useEffect(() => {
-    loadGame()
-  }, [params.id])
+    const initializeGame = async () => {
+      const resolvedParams = await params
+      setGameId(resolvedParams.id)
+      await loadGame(resolvedParams.id)
+    }
+    initializeGame()
+  }, [])
 
-  const loadGame = async () => {
+  const loadGame = async (id: string) => {
     try {
       // 먼저 로컬 스토리지에서 확인
       const createdGames = JSON.parse(localStorage.getItem('created-games') || '[]')
-      let foundGame = createdGames.find((g: QuizGame) => g.id === params.id)
+      let foundGame = createdGames.find((g: QuizGame) => g.id === id)
       
       if (!foundGame) {
         // 기본 게임에서 확인
-        foundGame = await getGameById(params.id)
+        foundGame = await getGameById(id)
       }
       
       setGame(foundGame)
@@ -73,6 +81,7 @@ export default function PlayGamePage({ params }: { params: { id: string } }) {
   const handlePlay = () => {
     if (currentQ) {
       const audio = new Audio(currentQ.clip)
+      audio.volume = volume // 볼륨 설정
       setAudioElement(audio)
       
       audio.play()
@@ -83,6 +92,14 @@ export default function PlayGamePage({ params }: { params: { id: string } }) {
         setIsPlaying(false)
         setQuestionTimerActive(true)
       }
+    }
+  }
+
+  // 볼륨 변경 핸들러
+  const handleVolumeChange = (newVolume: number) => {
+    setVolume(newVolume)
+    if (audioElement) {
+      audioElement.volume = newVolume
     }
   }
 
@@ -122,7 +139,7 @@ export default function PlayGamePage({ params }: { params: { id: string } }) {
       <div className="min-h-screen bg-gradient-to-br from-gray-50/40 via-white/80 to-gray-50/20 dark:from-gray-950/60 dark:via-gray-900/80 dark:to-gray-950/40 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Loading game...</p>
+          <p className="text-gray-600 dark:text-gray-400">게임 로딩 중...</p>
         </div>
       </div>
     )
@@ -161,16 +178,16 @@ export default function PlayGamePage({ params }: { params: { id: string } }) {
         <Card className="w-full max-w-md bg-white/80 dark:bg-gray-800/60 backdrop-blur-sm border-gray-200/60 dark:border-gray-700/60">
           <CardContent className="text-center p-6 sm:p-8">
             <div className="text-4xl sm:text-6xl mb-4">🎉</div>
-            <h2 className="text-xl sm:text-2xl font-bold mb-2">Quiz Complete!</h2>
+            <h2 className="text-xl sm:text-2xl font-bold mb-2">퀴즈 완료!</h2>
             <p className="text-3xl sm:text-4xl font-bold text-purple-600 mb-4">
               {score}/{questions.length}
             </p>
             <p className="text-gray-600 dark:text-gray-400 mb-6">
               {score === questions.length
-                ? "Perfect score!"
+                ? "만점!"
                 : score >= questions.length * 0.7
-                  ? "Great job!"
-                  : "Keep practicing!"}
+                  ? "잘했어요!"
+                  : "연습 더 해보세요!"}
             </p>
             <div className="space-y-3">
               <Button
@@ -178,11 +195,11 @@ export default function PlayGamePage({ params }: { params: { id: string } }) {
                 className="w-full bg-gradient-to-r from-blue-500/90 to-purple-500/90 hover:from-blue-600 hover:to-purple-600"
               >
                 <Share2 className="h-4 w-4 mr-2" />
-                Share Result
+                결과 공유
               </Button>
               <Link href="/" className="block">
                 <Button variant="outline" className="w-full border-gray-200/60 dark:border-gray-700/60">
-                  Back to Home
+                  홈으로 돌아가기
                 </Button>
               </Link>
             </div>
@@ -209,10 +226,10 @@ export default function PlayGamePage({ params }: { params: { id: string } }) {
             </Link>
             <div>
               <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
-                Question {currentQuestion + 1} of {questions.length}
+                문제 {currentQuestion + 1} / {questions.length}
               </h1>
               <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300">
-                Score: {score}/{questions.length}
+                점수: {score}/{questions.length}
               </p>
             </div>
           </div>
@@ -248,43 +265,61 @@ export default function PlayGamePage({ params }: { params: { id: string } }) {
                   <div className="w-24 h-24 sm:w-32 sm:h-32 bg-gradient-to-br from-purple-400/20 to-blue-500/20 dark:from-purple-400/30 dark:to-blue-500/30 rounded-full mx-auto mb-4 flex items-center justify-center border border-purple-200/30 dark:border-purple-400/30">
                     <Volume2 className="h-8 w-8 sm:h-12 sm:w-12 text-purple-600 dark:text-purple-400" />
                   </div>
-                  <h3 className="text-lg sm:text-xl font-semibold mb-2">Listen to the snippet</h3>
+                  <h3 className="text-lg sm:text-xl font-semibold mb-2">음악 클립 듣기</h3>
                   <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
-                    {isPlaying ? `${timeLeft}s remaining` : "Click play to start"}
+                    {isPlaying ? `${timeLeft}초 남음` : "재생 버튼을 눌러 시작하세요"}
                   </p>
                 </div>
 
-                <div className="flex justify-center gap-4">
-                  <Button
-                    size="lg"
-                    onClick={handlePlay}
-                    disabled={isPlaying || showResult}
-                    className="px-6 sm:px-8 bg-gradient-to-r from-blue-500/90 to-purple-500/90 hover:from-blue-600 hover:to-purple-600"
-                  >
-                    {isPlaying ? (
-                      <>
-                        <Pause className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
-                        Playing...
-                      </>
-                    ) : (
-                      <>
-                        <Play className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
-                        Play Snippet
-                      </>
-                    )}
-                  </Button>
-
-                  {showResult && (
+                <div className="flex flex-col items-center gap-4">
+                  <div className="flex justify-center gap-4">
                     <Button
-                      onClick={handleNext}
-                      variant="outline"
                       size="lg"
-                      className="border-gray-200/60 dark:border-gray-700/60"
+                      onClick={handlePlay}
+                      disabled={isPlaying || showResult}
+                      className="px-6 sm:px-8 bg-gradient-to-r from-blue-500/90 to-purple-500/90 hover:from-blue-600 hover:to-purple-600"
                     >
-                      <SkipForward className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
-                      Next Question
+                      {isPlaying ? (
+                        <>
+                          <Pause className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
+                          재생 중...
+                        </>
+                      ) : (
+                        <>
+                          <Play className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
+                          클립 재생
+                        </>
+                      )}
                     </Button>
-                  )}
+
+                    {showResult && (
+                      <Button
+                        onClick={handleNext}
+                        variant="outline"
+                        size="lg"
+                        className="border-gray-200/60 dark:border-gray-700/60"
+                      >
+                        <SkipForward className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
+                        다음 문제
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Volume Control */}
+                  <div className="flex items-center gap-3 w-full max-w-xs">
+                    <Volume2 className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                    <Slider
+                      value={[volume * 100]}
+                      onValueChange={(value) => handleVolumeChange(value[0] / 100)}
+                      max={100}
+                      min={0}
+                      step={5}
+                      className="flex-1"
+                    />
+                    <span className="text-xs text-gray-500 min-w-[3ch]">
+                      {Math.round(volume * 100)}%
+                    </span>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -292,7 +327,7 @@ export default function PlayGamePage({ params }: { params: { id: string } }) {
             {/* Answer Options */}
             <Card className="bg-white/70 dark:bg-gray-800/50 backdrop-blur-sm border-gray-200/60 dark:border-gray-700/60">
               <CardContent className="p-4 sm:p-6">
-                <h3 className="text-base sm:text-lg font-semibold mb-4">What song is this?</h3>
+                <h3 className="text-base sm:text-lg font-semibold mb-4">이 노래는 무엇일까요?</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
                   {currentQ.options.map((option, index) => (
                     <Button
@@ -308,12 +343,26 @@ export default function PlayGamePage({ params }: { params: { id: string } }) {
                             ? "default"
                             : "outline"
                       }
-                      className="h-auto p-3 sm:p-4 text-left justify-start text-sm sm:text-base border-gray-200/60 dark:border-gray-700/60"
+                      className={`h-auto p-3 sm:p-4 text-left justify-start text-sm sm:text-base border-gray-200/60 dark:border-gray-700/60 relative group ${
+                        showResult
+                          ? option === currentQ.correctAnswer
+                            ? "bg-green-500 hover:bg-green-600 text-white border-green-500"
+                            : option === selectedAnswer
+                              ? "bg-red-500 hover:bg-red-600 text-white border-red-500"
+                              : ""
+                          : ""
+                      }`}
                       onClick={() => !showResult && handleAnswer(option)}
                       disabled={showResult}
+                      title={option} // 호버 시 전체 제목 표시
                     >
                       <span className="font-medium mr-2">{String.fromCharCode(65 + index)}.</span>
-                      <span className="truncate">{option}</span>
+                      <span className="truncate capitalize">{option}</span>
+                      
+                      {/* 호버 안내 툴팁 */}
+                      <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-900/90 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 backdrop-blur-sm">
+                        호버로 전체 제목 확인
+                      </div>
                     </Button>
                   ))}
                 </div>
@@ -331,17 +380,14 @@ export default function PlayGamePage({ params }: { params: { id: string } }) {
                       {selectedAnswer === currentQ.correctAnswer ? "✅" : "❌"}
                     </div>
                     <h3 className="font-semibold text-base sm:text-lg mb-2">
-                      {selectedAnswer === currentQ.correctAnswer ? "Correct!" : "Incorrect"}
+                      {selectedAnswer === currentQ.correctAnswer ? "정답!" : "오답"}
                     </h3>
                     <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-4">
-                      The answer was: <strong>{currentQ.correctAnswer}</strong>
+                      정답은: <strong>{currentQ.correctAnswer}</strong>
                     </p>
                     <div className="text-xs sm:text-sm">
                       <p>
-                        <strong>Artist:</strong> {currentQ.artist}
-                      </p>
-                      <p>
-                        <strong>Album:</strong> {currentQ.album}
+                        <strong>앨범:</strong> {currentQ.album}
                       </p>
                     </div>
                   </div>
@@ -351,20 +397,20 @@ export default function PlayGamePage({ params }: { params: { id: string } }) {
 
             <Card className="bg-white/70 dark:bg-gray-800/50 backdrop-blur-sm border-gray-200/60 dark:border-gray-700/60">
               <CardContent className="p-4 sm:p-6">
-                <h3 className="font-semibold mb-4 text-base sm:text-lg">Game Progress</h3>
+                <h3 className="font-semibold mb-4 text-base sm:text-lg">게임 진행 상황</h3>
                 <div className="space-y-3">
                   <div className="flex justify-between text-sm">
-                    <span>Questions</span>
+                    <span>문제</span>
                     <span>
                       {currentQuestion + 1}/{questions.length}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span>Correct</span>
+                    <span>맞힌 개수</span>
                     <span>{score}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span>Accuracy</span>
+                    <span>정확도</span>
                     <span>
                       {currentQuestion > 0 ? Math.round((score / (currentQuestion + (showResult ? 1 : 0))) * 100) : 0}%
                     </span>
